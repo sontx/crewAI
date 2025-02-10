@@ -53,6 +53,7 @@ class Task(BaseModel):
         agent: Agent responsible for task execution. Represents entity performing task.
         async_execution: Boolean flag indicating asynchronous task execution.
         callback: Function/object executed post task completion for additional actions.
+        before_callback: Function/object executed pre task execution for additional actions.
         config: Dictionary containing task-specific configuration parameters.
         context: List of Task instances providing task context or input data.
         description: Descriptive text detailing task's purpose and execution.
@@ -81,6 +82,9 @@ class Task(BaseModel):
     )
     callback: Optional[Any] = Field(
         description="Callback to be executed after the task is completed.", default=None
+    )
+    before_callback: Optional[Any] = Field(
+        description="Callback to be executed before the task is executed.", default=None
     )
     agent: Optional[BaseAgent] = Field(
         description="Agent responsible for execution the task.", default=None
@@ -354,6 +358,9 @@ class Task(BaseModel):
             raise Exception(
                 f"The task '{self.description}' has no agent assigned, therefore it can't be executed directly and should be executed in a Crew using a specific process that support that, like hierarchical."
             )
+
+        if self.before_callback:
+            self.before_callback()
 
         self.start_time = datetime.datetime.now()
         self._execution_span = self._telemetry.task_started(crew=agent.crew, task=self)

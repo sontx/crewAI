@@ -59,6 +59,7 @@ class Agent(BaseAgent):
             allow_delegation: Whether the agent is allowed to delegate tasks to other agents.
             tools: Tools at agents disposal
             step_callback: Callback to be executed after each step of the agent execution.
+            before_step_callback: Callback to be executed before each step of the agent execution.
             knowledge_sources: Knowledge sources for the agent.
             embedder: Embedder configuration for the agent.
     """
@@ -73,6 +74,10 @@ class Agent(BaseAgent):
     step_callback: Optional[Any] = Field(
         default=None,
         description="Callback to be executed after each step of the agent execution.",
+    )
+    before_step_callback: Optional[Any] = Field(
+        default=None,
+        description="Callback to be executed before each step of the agent execution.",
     )
     use_system_prompt: Optional[bool] = Field(
         default=True,
@@ -311,6 +316,7 @@ class Agent(BaseAgent):
             tools_names=self.__tools_names(parsed_tools),
             tools_description=self._render_text_description_and_args(parsed_tools),
             step_callback=self.step_callback,
+            before_step_callback=self.before_step_callback,
             function_calling_llm=self.function_calling_llm,
             respect_context_window=self.respect_context_window,
             request_within_rpm_limit=(

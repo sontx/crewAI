@@ -48,6 +48,7 @@ class CrewAgentExecutor(CrewAgentExecutorMixin):
         tools_description: str,
         tools_handler: ToolsHandler,
         step_callback: Any = None,
+        before_step_callback: Any = None,
         original_tools: List[Any] = [],
         function_calling_llm: Any = None,
         respect_context_window: bool = False,
@@ -69,6 +70,7 @@ class CrewAgentExecutor(CrewAgentExecutorMixin):
         self.tools_handler = tools_handler
         self.original_tools = original_tools
         self.step_callback = step_callback
+        self.before_step_callback = before_step_callback
         self.use_stop_words = self.llm.supports_stop_words()
         self.tools_description = tools_description
         self.function_calling_llm = function_calling_llm
@@ -129,6 +131,9 @@ class CrewAgentExecutor(CrewAgentExecutorMixin):
         formatted_answer = None
         while not isinstance(formatted_answer, AgentFinish):
             try:
+                if self.before_step_callback:
+                    self.before_step_callback(formatted_answer, "agent")
+                
                 if self._has_reached_max_iterations():
                     formatted_answer = self._handle_max_iterations_exceeded(
                         formatted_answer
@@ -141,6 +146,9 @@ class CrewAgentExecutor(CrewAgentExecutorMixin):
                 formatted_answer = self._process_llm_response(answer)
 
                 if isinstance(formatted_answer, AgentAction):
+                    if self.before_step_callback:
+                        self.before_step_callback(formatted_answer, "tool")
+                    
                     tool_result = self._execute_tool_and_check_finality(
                         formatted_answer
                     )
@@ -244,7 +252,7 @@ class CrewAgentExecutor(CrewAgentExecutorMixin):
             return formatted_answer  # Continue the loop
 
         if self.step_callback:
-            self.step_callback(tool_result)
+            self.step_callback(tool_result, "tool")
 
         formatted_answer.text += f"\nObservation: {tool_result.result}"
         formatted_answer.result = tool_result.result
@@ -262,7 +270,7 @@ class CrewAgentExecutor(CrewAgentExecutorMixin):
     def _invoke_step_callback(self, formatted_answer) -> None:
         """Invoke the step callback if it exists."""
         if self.step_callback:
-            self.step_callback(formatted_answer)
+            self.step_callback(formatted_answer, "agent")
 
     def _append_message(self, text: str, role: str = "assistant") -> None:
         """Append a message to the message list with the given role."""
