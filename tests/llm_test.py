@@ -6,8 +6,9 @@ import pytest
 from pydantic import BaseModel
 
 from crewai.agents.agent_builder.utilities.base_token_process import TokenProcess
-from crewai.llm import LLM
-from crewai.tools import tool
+from crewai.llm import CONTEXT_WINDOW_USAGE_RATIO, LLM
+from crewai.utilities.events import crewai_event_bus
+from crewai.utilities.events.tool_usage_events import ToolExecutionErrorEvent
 from crewai.utilities.token_counter_callback import TokenCalcHandler
 
 
@@ -218,7 +219,7 @@ def test_get_custom_llm_provider_gemini():
 
 def test_get_custom_llm_provider_openai():
     llm = LLM(model="gpt-4")
-    assert llm._get_custom_llm_provider() == "openai"
+    assert llm._get_custom_llm_provider() == None
 
 
 def test_validate_call_params_supported():
@@ -285,37 +286,59 @@ def test_o3_mini_reasoning_effort_medium():
     assert "Paris" in result
 
 
+def test_context_window_validation():
+    """Test that context window validation works correctly."""
+    # Test valid window size
+    llm = LLM(model="o3-mini")
+    assert llm.get_context_window_size() == int(200000 * CONTEXT_WINDOW_USAGE_RATIO)
+
+    # Test invalid window size
+    with pytest.raises(ValueError) as excinfo:
+        with patch.dict(
+            "crewai.llm.LLM_CONTEXT_WINDOW_SIZES",
+            {"test-model": 500},  # Below minimum
+            clear=True,
+        ):
+            llm = LLM(model="test-model")
+            llm.get_context_window_size()
+    assert "must be between 1024 and 2097152" in str(excinfo.value)
+
+
 @pytest.mark.vcr(filter_headers=["authorization"])
 @pytest.fixture
 def anthropic_llm():
     """Fixture providing an Anthropic LLM instance."""
     return LLM(model="anthropic/claude-3-sonnet")
 
+
 @pytest.fixture
 def system_message():
     """Fixture providing a system message."""
     return {"role": "system", "content": "test"}
+
 
 @pytest.fixture
 def user_message():
     """Fixture providing a user message."""
     return {"role": "user", "content": "test"}
 
+
 def test_anthropic_message_formatting_edge_cases(anthropic_llm):
     """Test edge cases for Anthropic message formatting."""
     # Test None messages
     with pytest.raises(TypeError, match="Messages cannot be None"):
         anthropic_llm._format_messages_for_provider(None)
-        
+
     # Test empty message list
     formatted = anthropic_llm._format_messages_for_provider([])
     assert len(formatted) == 1
     assert formatted[0]["role"] == "user"
     assert formatted[0]["content"] == "."
-    
+
     # Test invalid message format
     with pytest.raises(TypeError, match="Invalid message format"):
         anthropic_llm._format_messages_for_provider([{"invalid": "message"}])
+
 
 def test_anthropic_model_detection():
     """Test Anthropic model detection with various formats."""
@@ -327,10 +350,11 @@ def test_anthropic_model_detection():
         ("", False),
         ("anthropomorphic", False),  # Should not match partial words
     ]
-    
+
     for model, expected in models:
         llm = LLM(model=model)
         assert llm.is_anthropic == expected, f"Failed for model: {model}"
+
 
 def test_anthropic_message_formatting(anthropic_llm, system_message, user_message):
     """Test Anthropic message formatting with fixtures."""
@@ -371,3 +395,51 @@ def test_deepseek_r1_with_open_router():
     result = llm.call("What is the capital of France?")
     assert isinstance(result, str)
     assert "Paris" in result
+
+
+@pytest.mark.vcr(filter_headers=["authorization"])
+def test_tool_execution_error_event():
+    llm = LLM(model="gpt-4o-mini")
+
+    def failing_tool(param: str) -> str:
+        """This tool always fails."""
+        raise Exception("Tool execution failed!")
+
+    tool_schema = {
+        "type": "function",
+        "function": {
+            "name": "failing_tool",
+            "description": "This tool always fails.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "param": {"type": "string", "description": "A test parameter"}
+                },
+                "required": ["param"],
+            },
+        },
+    }
+
+    received_events = []
+
+    @crewai_event_bus.on(ToolExecutionErrorEvent)
+    def event_handler(source, event):
+        received_events.append(event)
+
+    available_functions = {"failing_tool": failing_tool}
+
+    messages = [{"role": "user", "content": "Use the failing tool"}]
+
+    llm.call(
+        messages,
+        tools=[tool_schema],
+        available_functions=available_functions,
+    )
+
+    assert len(received_events) == 1
+    event = received_events[0]
+    assert isinstance(event, ToolExecutionErrorEvent)
+    assert event.tool_name == "failing_tool"
+    assert event.tool_args == {"param": "test"}
+    assert event.tool_class == failing_tool
+    assert "Tool execution failed!" in event.error

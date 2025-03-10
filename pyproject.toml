@@ -1,10 +1,12 @@
 [project]
 name = "crewai"
-version = "0.102.0"
+version = "0.105.0"
 description = "Cutting-edge framework for orchestrating role-playing, autonomous AI agents. By fostering collaborative intelligence, CrewAI empowers agents to work together seamlessly, tackling complex tasks."
 readme = "README.md"
 requires-python = ">=3.10,<3.13"
-authors = [{ name = "Joao Moura", email = "joao@crewai.com" }]
+authors = [
+    { name = "Joao Moura", email = "joao@crewai.com" }
+]
 dependencies = [
     # Core Dependencies
     "pydantic>=2.4.2",
@@ -43,15 +45,25 @@ Documentation = "https://docs.crewai.com"
 Repository = "https://github.com/crewAIInc/crewAI"
 
 [project.optional-dependencies]
-tools = ["crewai-tools>=0.36.0"]
-embeddings = ["tiktoken~=0.7.0"]
+tools = ["crewai-tools>=0.37.0"]
+embeddings = [
+    "tiktoken~=0.7.0"
+]
 agentops = ["agentops>=0.3.0"]
 fastembed = ["fastembed>=0.4.1"]
-pdfplumber = ["pdfplumber>=0.11.4"]
-pandas = ["pandas>=2.2.3"]
-openpyxl = ["openpyxl>=3.1.5"]
+pdfplumber = [
+    "pdfplumber>=0.11.4",
+]
+pandas = [
+    "pandas>=2.2.3",
+]
+openpyxl = [
+    "openpyxl>=3.1.5",
+]
 mem0 = ["mem0ai>=0.1.29"]
-docling = ["docling>=2.12.0"]
+docling = [
+    "docling>=2.12.0",
+]
 
 [tool.uv]
 dev-dependencies = [
