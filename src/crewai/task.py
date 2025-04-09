@@ -47,6 +47,7 @@ from crewai.utilities.events import (
     TaskStartedEvent,
 )
 from crewai.utilities.events.crewai_event_bus import crewai_event_bus
+from crewai.utilities.exceptions.interrupted_exception import InterruptedException
 from crewai.utilities.i18n import I18N
 from crewai.utilities.printer import Printer
 
@@ -397,7 +398,7 @@ class Task(BaseModel):
             result = agent.execute_task(
                 task=self,
                 context=context,
-                tools=tools,
+                tools=self._normalize_tools(tools),
             )
 
             pydantic_output, json_output = self._export_output(result)
@@ -471,10 +472,18 @@ class Task(BaseModel):
                 self._save_file(content)
             crewai_event_bus.emit(self, TaskCompletedEvent(output=task_output))
             return task_output
+        except InterruptedException as e:
+            raise e
         except Exception as e:
             self.end_time = datetime.datetime.now()
             crewai_event_bus.emit(self, TaskFailedEvent(error=str(e)))
             raise e  # Re-raise the exception after emitting the event
+
+    def _normalize_tools(self, tools: List[Any]) -> List[Any]:
+        # Inject the task_id into the tools
+        for tool in tools:
+            tool._crew_task_id = self.id
+        return tools
 
     def prompt(self) -> str:
         """Prompt the task.

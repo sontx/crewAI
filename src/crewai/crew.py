@@ -56,6 +56,7 @@ from crewai.utilities.events.crew_events import (
 )
 from crewai.utilities.events.crewai_event_bus import crewai_event_bus
 from crewai.utilities.events.event_listener import EventListener
+from crewai.utilities.exceptions.interrupted_exception import InterruptedException
 from crewai.utilities.formatter import (
     aggregate_raw_outputs_from_task_outputs,
     aggregate_raw_outputs_from_tasks,
@@ -654,6 +655,8 @@ class Crew(BaseModel):
             for metric in metrics:
                 self.usage_metrics.add_usage_metrics(metric)
             return result
+        except InterruptedException as e:
+            raise e
         except Exception as e:
             crewai_event_bus.emit(
                 self,
@@ -847,14 +850,33 @@ class Crew(BaseModel):
                     futures.clear()
 
                 context = self._get_context(task, task_outputs)
-                task_output = task.execute_sync(
-                    agent=agent_to_use,
-                    context=context,
-                    tools=tools_for_task,
-                )
-                task_outputs.append(task_output)
-                self._process_task_result(task, task_output)
-                self._store_execution_log(task, task_output, task_index, was_replayed)
+                try:
+                    task_output = task.execute_sync(
+                        agent=agent_to_use,
+                        context=context,
+                        tools=tools_for_task,
+                    )
+                    task_outputs.append(task_output)
+                    self._process_task_result(task, task_output)
+                    self._store_execution_log(task, task_output, task_index, was_replayed)
+                except InterruptedException as e:
+                    # Store the interrupted task output so we can replay it later
+                    if e.resumable:
+                        # A dummy task output to store the interrupted task, thus there are no data to store for an interrupted task yet
+                        task_output = TaskOutput(
+                            name=task.name,
+                            description=task.description,
+                            expected_output=task.expected_output,
+                            raw='',
+                            pydantic=None,
+                            json_dict=None,
+                            agent=task.agent.role if task.agent else None,
+                        )
+                        self._store_execution_log(task, task_output, task_index, was_replayed)
+                    # Save the interrupted task output if task was stopped but still successful
+                    elif e.success:
+                        self._create_crew_output(task_outputs)
+                    raise e
 
         if futures:
             task_outputs = self._process_async_tasks(futures, was_replayed)
