@@ -11,6 +11,10 @@ def db_storage_path() -> str:
     Returns:
         str: Full path to the SQLite database file
     """
+    task_storage_path = get_task_storage_path()
+    if task_storage_path:
+        return task_storage_path
+    
     app_name = get_project_directory_name()
     app_author = "CrewAI"
 
@@ -29,3 +33,17 @@ def get_project_directory_name():
         cwd = Path.cwd()
         project_directory_name = cwd.name
         return project_directory_name
+    
+def get_task_storage_path() -> str | None:
+    """Returns the path for task storage.
+    Returns:
+        str: Full path to the task storage directory.
+    """
+    task_id = os.getenv("CW_TASK_ID")
+    if not task_id:
+        return None
+    
+    project_directory_name = get_project_directory_name()
+    task_storage_path = Path(project_directory_name) / "data" / task_id
+    task_storage_path.mkdir(parents=True, exist_ok=True)
+    return str(task_storage_path)
