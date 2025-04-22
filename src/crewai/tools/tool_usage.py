@@ -24,6 +24,7 @@ from crewai.utilities.events.tool_usage_events import (
     ToolUsageFinishedEvent,
     ToolValidateInputErrorEvent,
 )
+from crewai.utilities.exceptions.interrupted_exception import InterruptedException
 
 OPENAI_BIGGER_MODELS = [
     "gpt-4",
@@ -123,6 +124,8 @@ class ToolUsage:
                 return result
 
             except Exception as e:
+                if isinstance(e, InterruptedException):
+                    raise
                 error = getattr(e, "message", str(e))
                 self.task.increment_tools_errors()
                 if self.agent.verbose:
@@ -188,12 +191,17 @@ class ToolUsage:
                             if k in acceptable_args
                         }
                         result = tool.invoke(input=arguments)
-                    except Exception:
+                    except Exception as e:
+                        if isinstance(e, InterruptedException):
+                            raise
+                        print("Error in arguments 1")
                         arguments = calling.arguments
                         result = tool.invoke(input=arguments)
                 else:
                     result = tool.invoke(input={})
             except Exception as e:
+                if isinstance(e, InterruptedException):
+                    raise
                 self.on_tool_error(tool=tool, tool_calling=calling, e=e)
                 self._run_attempts += 1
                 if self._run_attempts > self._max_parsing_attempts:
