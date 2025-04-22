@@ -850,6 +850,7 @@ class Crew(BaseModel):
                     futures.clear()
 
                 context = self._get_context(task, task_outputs)
+                is_saved_execution_log = False
                 try:
                     task_output = task.execute_sync(
                         agent=agent_to_use,
@@ -859,24 +860,24 @@ class Crew(BaseModel):
                     task_outputs.append(task_output)
                     self._process_task_result(task, task_output)
                     self._store_execution_log(task, task_output, task_index, was_replayed)
+                    is_saved_execution_log = True
                 except InterruptedException as e:
-                    # Store the interrupted task output so we can replay it later
-                    if e.resumable:
-                        # A dummy task output to store the interrupted task, thus there are no data to store for an interrupted task yet
+                    if e.success:
+                        self._create_crew_output(task_outputs)
+                    raise e
+                finally:
+                    if not is_saved_execution_log:
+                        # A dummy task output to store the execution log for failed task, thus there are no data to store for an failed task yet
                         task_output = TaskOutput(
                             name=task.name,
                             description=task.description,
                             expected_output=task.expected_output,
-                            raw='',
+                            raw='__FAILED__', # Dummy value to indicate failure
                             pydantic=None,
                             json_dict=None,
                             agent=task.agent.role if task.agent else None,
                         )
                         self._store_execution_log(task, task_output, task_index, was_replayed)
-                    # Save the interrupted task output if task was stopped but still successful
-                    elif e.success:
-                        self._create_crew_output(task_outputs)
-                    raise e
 
         if futures:
             task_outputs = self._process_async_tasks(futures, was_replayed)
