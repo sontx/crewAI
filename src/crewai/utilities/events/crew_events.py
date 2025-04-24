@@ -19,6 +19,7 @@ class CrewKickoffCompletedEvent(CrewEvent):
     crew_name: Optional[str]
     output: Any
     type: str = "crew_kickoff_completed"
+    token_usage: Optional[Any] = None
 
 
 class CrewKickoffFailedEvent(CrewEvent):
@@ -27,6 +28,7 @@ class CrewKickoffFailedEvent(CrewEvent):
     error: str
     crew_name: Optional[str]
     type: str = "crew_kickoff_failed"
+    token_usage: Optional[Any] = None
 
 
 class CrewTrainStartedEvent(CrewEvent):

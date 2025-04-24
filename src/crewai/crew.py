@@ -658,9 +658,20 @@ class Crew(BaseModel):
         except InterruptedException as e:
             raise e
         except Exception as e:
+            metrics: List[UsageMetrics] = []
+            metrics += [agent._token_process.get_summary() for agent in self.agents]
+
+            self.usage_metrics = UsageMetrics()
+            for metric in metrics:
+                self.usage_metrics.add_usage_metrics(metric)
+                
             crewai_event_bus.emit(
                 self,
-                CrewKickoffFailedEvent(error=str(e), crew_name=self.name or "crew"),
+                CrewKickoffFailedEvent(
+                    error=str(e),
+                    crew_name=self.name or "crew",
+                    token_usage=self.usage_metrics,
+                ),
             )
             raise
 
@@ -1033,7 +1044,9 @@ class Crew(BaseModel):
         crewai_event_bus.emit(
             self,
             CrewKickoffCompletedEvent(
-                crew_name=self.name or "crew", output=final_task_output
+                crew_name=self.name or "crew",
+                output=final_task_output,
+                token_usage=token_usage,
             ),
         )
         return CrewOutput(
