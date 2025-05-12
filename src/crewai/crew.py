@@ -6,7 +6,17 @@ import warnings
 from concurrent.futures import Future
 from copy import copy as shallow_copy
 from hashlib import md5
-from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    List,
+    Optional,
+    Set,
+    Tuple,
+    Union,
+    cast,
+)
 
 from pydantic import (
     UUID4,
@@ -24,10 +34,12 @@ from crewai.agent import Agent
 from crewai.agents.agent_builder.base_agent import BaseAgent
 from crewai.agents.cache import CacheHandler
 from crewai.crews.crew_output import CrewOutput
+from crewai.flow.flow_trackable import FlowTrackable
 from crewai.knowledge.knowledge import Knowledge
 from crewai.knowledge.source.base_knowledge_source import BaseKnowledgeSource
-from crewai.llm import LLM
+from crewai.llm import LLM, BaseLLM
 from crewai.memory.entity.entity_memory import EntityMemory
+from crewai.memory.external.external_memory import ExternalMemory
 from crewai.memory.long_term.long_term_memory import LongTermMemory
 from crewai.memory.short_term.short_term_memory import ShortTermMemory
 from crewai.memory.user.user_memory import UserMemory
@@ -37,7 +49,7 @@ from crewai.task import Task
 from crewai.tasks.conditional_task import ConditionalTask
 from crewai.tasks.task_output import TaskOutput
 from crewai.tools.agent_tools.agent_tools import AgentTools
-from crewai.tools.base_tool import Tool
+from crewai.tools.base_tool import BaseTool, Tool
 from crewai.types.usage_metrics import UsageMetrics
 from crewai.utilities import I18N, FileHandler, Logger, RPMController
 from crewai.utilities.constants import TRAINING_DATA_FILE
@@ -69,7 +81,7 @@ from crewai.utilities.training_handler import CrewTrainingHandler
 warnings.filterwarnings("ignore", category=SyntaxWarning, module="pysbd")
 
 
-class Crew(BaseModel):
+class Crew(FlowTrackable, BaseModel):
     """
     Represents a group of agents, defining how they should collaborate and the tasks they should perform.
 
@@ -106,6 +118,7 @@ class Crew(BaseModel):
     _long_term_memory: Optional[InstanceOf[LongTermMemory]] = PrivateAttr()
     _entity_memory: Optional[InstanceOf[EntityMemory]] = PrivateAttr()
     _user_memory: Optional[InstanceOf[UserMemory]] = PrivateAttr()
+    _external_memory: Optional[InstanceOf[ExternalMemory]] = PrivateAttr()
     _train: Optional[bool] = PrivateAttr(default=False)
     _train_iteration: Optional[int] = PrivateAttr()
     _inputs: Optional[Dict[str, Any]] = PrivateAttr(default=None)
@@ -146,6 +159,10 @@ class Crew(BaseModel):
         default=None,
         description="An instance of the UserMemory to be used by the Crew to store/fetch memories of a specific user.",
     )
+    external_memory: Optional[InstanceOf[ExternalMemory]] = Field(
+        default=None,
+        description="An Instance of the ExternalMemory to be used by the Crew",
+    )
     embedder: Optional[dict] = Field(
         default=None,
         description="Configuration for the embedder to be used for the crew.",
@@ -154,7 +171,7 @@ class Crew(BaseModel):
         default=None,
         description="Metrics for the LLM usage during all tasks execution.",
     )
-    manager_llm: Optional[Any] = Field(
+    manager_llm: Optional[Union[str, InstanceOf[BaseLLM], Any]] = Field(
         description="Language model that will run the agent.", default=None
     )
     manager_agent: Optional[BaseAgent] = Field(
@@ -188,7 +205,7 @@ class Crew(BaseModel):
         default=None,
         description="Maximum number of requests per minute for the crew execution to be respected.",
     )
-    prompt_file: str = Field(
+    prompt_file: Optional[str] = Field(
         default=None,
         description="Path to the prompt json file to be used for the crew.",
     )
@@ -200,7 +217,7 @@ class Crew(BaseModel):
         default=False,
         description="Plan the crew execution and add the plan to the crew.",
     )
-    planning_llm: Optional[Any] = Field(
+    planning_llm: Optional[Union[str, InstanceOf[BaseLLM], Any]] = Field(
         default=None,
         description="Language model that will run the AgentPlanner if planning is True.",
     )
@@ -216,7 +233,7 @@ class Crew(BaseModel):
         default=None,
         description="Knowledge sources for the crew. Add knowledge sources to the knowledge object.",
     )
-    chat_llm: Optional[Any] = Field(
+    chat_llm: Optional[Union[str, InstanceOf[BaseLLM], Any]] = Field(
         default=None,
         description="LLM used to handle chatting with the crew.",
     )
@@ -270,46 +287,51 @@ class Crew(BaseModel):
 
         return self
 
+    def _initialize_user_memory(self):
+        if (
+            self.memory_config
+            and "user_memory" in self.memory_config
+            and self.memory_config.get("provider") == "mem0"
+        ):  # Check for user_memory in config
+            user_memory_config = self.memory_config["user_memory"]
+            if isinstance(
+                user_memory_config, dict
+            ):  # Check if it's a configuration dict
+                self._user_memory = UserMemory(crew=self)
+            else:
+                raise TypeError("user_memory must be a configuration dictionary")
+
+    def _initialize_default_memories(self):
+        self._long_term_memory = self._long_term_memory or LongTermMemory()
+        self._short_term_memory = self._short_term_memory or ShortTermMemory(
+            crew=self,
+            embedder_config=self.embedder,
+        )
+        self._entity_memory = self.entity_memory or EntityMemory(
+            crew=self, embedder_config=self.embedder
+        )
+
     @model_validator(mode="after")
     def create_crew_memory(self) -> "Crew":
-        """Set private attributes."""
+        """Initialize private memory attributes."""
+        self._external_memory = (
+            # External memory doesn’t support a default value since it was designed to be managed entirely externally
+            self.external_memory.set_crew(self)
+            if self.external_memory
+            else None
+        )
+
+        self._long_term_memory = self.long_term_memory
+        self._short_term_memory = self.short_term_memory
+        self._entity_memory = self.entity_memory
+
+        # UserMemory is gonna to be deprecated in the future, but we have to initialize a default value for now
+        self._user_memory = None
+
         if self.memory:
-            self._long_term_memory = (
-                self.long_term_memory if self.long_term_memory else LongTermMemory()
-            )
-            self._short_term_memory = (
-                self.short_term_memory
-                if self.short_term_memory
-                else ShortTermMemory(
-                    crew=self,
-                    embedder_config=self.embedder,
-                )
-            )
-            self._entity_memory = (
-                self.entity_memory
-                if self.entity_memory
-                else EntityMemory(crew=self, embedder_config=self.embedder)
-            )
-            if (
-                self.memory_config and "user_memory" in self.memory_config
-            ):  # Check for user_memory in config
-                user_memory_config = self.memory_config["user_memory"]
-                if isinstance(
-                    user_memory_config, UserMemory
-                ):  # Check if it is already an instance
-                    self._user_memory = user_memory_config
-                elif isinstance(
-                    user_memory_config, dict
-                ):  # Check if it's a configuration dict
-                    self._user_memory = UserMemory(
-                        crew=self, **user_memory_config
-                    )  # Initialize with config
-                else:
-                    raise TypeError(
-                        "user_memory must be a UserMemory instance or a configuration dictionary"
-                    )
-            else:
-                self._user_memory = None  # No user memory if not in config
+            self._initialize_default_memories()
+            self._initialize_user_memory()
+
         return self
 
     @model_validator(mode="after")
@@ -325,6 +347,7 @@ class Crew(BaseModel):
                         embedder=self.embedder,
                         collection_name="crew",
                     )
+                    self.knowledge.add_sources()
 
             except Exception as e:
                 self._logger.log(
@@ -490,7 +513,7 @@ class Crew(BaseModel):
             task.key for task in self.tasks
         ]
         return md5("|".join(source).encode(), usedforsecurity=False).hexdigest()
-        
+
     @property
     def fingerprint(self) -> Fingerprint:
         """
@@ -664,7 +687,7 @@ class Crew(BaseModel):
             self.usage_metrics = UsageMetrics()
             for metric in metrics:
                 self.usage_metrics.add_usage_metrics(metric)
-                
+
             crewai_event_bus.emit(
                 self,
                 CrewKickoffFailedEvent(
@@ -833,7 +856,12 @@ class Crew(BaseModel):
 
             # Determine which tools to use - task tools take precedence over agent tools
             tools_for_task = task.tools or agent_to_use.tools or []
-            tools_for_task = self._prepare_tools(agent_to_use, task, tools_for_task)
+            # Prepare tools and ensure they're compatible with task execution
+            tools_for_task = self._prepare_tools(
+                agent_to_use,
+                task,
+                cast(Union[List[Tool], List[BaseTool]], tools_for_task),
+            )
 
             self._log_task_start(task, agent_to_use.role)
 
@@ -852,7 +880,7 @@ class Crew(BaseModel):
                 future = task.execute_async(
                     agent=agent_to_use,
                     context=context,
-                    tools=tools_for_task,
+                    tools=cast(List[BaseTool], tools_for_task),
                 )
                 futures.append((task, future, task_index))
             else:
@@ -866,7 +894,7 @@ class Crew(BaseModel):
                     task_output = task.execute_sync(
                         agent=agent_to_use,
                         context=context,
-                        tools=tools_for_task,
+                        tools=cast(List[BaseTool], tools_for_task),
                     )
                     task_outputs.append(task_output)
                     self._process_task_result(task, task_output)
@@ -922,10 +950,12 @@ class Crew(BaseModel):
         return None
 
     def _prepare_tools(
-        self, agent: BaseAgent, task: Task, tools: List[Tool]
-    ) -> List[Tool]:
+        self, agent: BaseAgent, task: Task, tools: Union[List[Tool], List[BaseTool]]
+    ) -> List[BaseTool]:
         # Add delegation tools if agent allows delegation
-        if agent.allow_delegation:
+        if hasattr(agent, "allow_delegation") and getattr(
+            agent, "allow_delegation", False
+        ):
             if self.process == Process.hierarchical:
                 if self.manager_agent:
                     tools = self._update_manager_tools(task, tools)
@@ -934,17 +964,24 @@ class Crew(BaseModel):
                         "Manager agent is required for hierarchical process."
                     )
 
-            elif agent and agent.allow_delegation:
+            elif agent:
                 tools = self._add_delegation_tools(task, tools)
 
         # Add code execution tools if agent allows code execution
-        if agent.allow_code_execution:
+        if hasattr(agent, "allow_code_execution") and getattr(
+            agent, "allow_code_execution", False
+        ):
             tools = self._add_code_execution_tools(agent, tools)
 
-        if agent and agent.multimodal:
+        if (
+            agent
+            and hasattr(agent, "multimodal")
+            and getattr(agent, "multimodal", False)
+        ):
             tools = self._add_multimodal_tools(agent, tools)
 
-        return tools
+        # Return a List[BaseTool] which is compatible with both Task.execute_sync and Task.execute_async
+        return cast(List[BaseTool], tools)
 
     def _get_agent_to_use(self, task: Task) -> Optional[BaseAgent]:
         if self.process == Process.hierarchical:
@@ -952,11 +989,13 @@ class Crew(BaseModel):
         return task.agent
 
     def _merge_tools(
-        self, existing_tools: List[Tool], new_tools: List[Tool]
-    ) -> List[Tool]:
+        self,
+        existing_tools: Union[List[Tool], List[BaseTool]],
+        new_tools: Union[List[Tool], List[BaseTool]],
+    ) -> List[BaseTool]:
         """Merge new tools into existing tools list, avoiding duplicates by tool name."""
         if not new_tools:
-            return existing_tools
+            return cast(List[BaseTool], existing_tools)
 
         # Create mapping of tool names to new tools
         new_tool_map = {tool.name: tool for tool in new_tools}
@@ -967,23 +1006,41 @@ class Crew(BaseModel):
         # Add all new tools
         tools.extend(new_tools)
 
-        return tools
+        return cast(List[BaseTool], tools)
 
     def _inject_delegation_tools(
-        self, tools: List[Tool], task_agent: BaseAgent, agents: List[BaseAgent]
-    ):
-        delegation_tools = task_agent.get_delegation_tools(agents)
-        return self._merge_tools(tools, delegation_tools)
+        self,
+        tools: Union[List[Tool], List[BaseTool]],
+        task_agent: BaseAgent,
+        agents: List[BaseAgent],
+    ) -> List[BaseTool]:
+        if hasattr(task_agent, "get_delegation_tools"):
+            delegation_tools = task_agent.get_delegation_tools(agents)
+            # Cast delegation_tools to the expected type for _merge_tools
+            return self._merge_tools(tools, cast(List[BaseTool], delegation_tools))
+        return cast(List[BaseTool], tools)
 
-    def _add_multimodal_tools(self, agent: BaseAgent, tools: List[Tool]):
-        multimodal_tools = agent.get_multimodal_tools()
-        return self._merge_tools(tools, multimodal_tools)
+    def _add_multimodal_tools(
+        self, agent: BaseAgent, tools: Union[List[Tool], List[BaseTool]]
+    ) -> List[BaseTool]:
+        if hasattr(agent, "get_multimodal_tools"):
+            multimodal_tools = agent.get_multimodal_tools()
+            # Cast multimodal_tools to the expected type for _merge_tools
+            return self._merge_tools(tools, cast(List[BaseTool], multimodal_tools))
+        return cast(List[BaseTool], tools)
 
-    def _add_code_execution_tools(self, agent: BaseAgent, tools: List[Tool]):
-        code_tools = agent.get_code_execution_tools()
-        return self._merge_tools(tools, code_tools)
+    def _add_code_execution_tools(
+        self, agent: BaseAgent, tools: Union[List[Tool], List[BaseTool]]
+    ) -> List[BaseTool]:
+        if hasattr(agent, "get_code_execution_tools"):
+            code_tools = agent.get_code_execution_tools()
+            # Cast code_tools to the expected type for _merge_tools
+            return self._merge_tools(tools, cast(List[BaseTool], code_tools))
+        return cast(List[BaseTool], tools)
 
-    def _add_delegation_tools(self, task: Task, tools: List[Tool]):
+    def _add_delegation_tools(
+        self, task: Task, tools: Union[List[Tool], List[BaseTool]]
+    ) -> List[BaseTool]:
         agents_for_delegation = [agent for agent in self.agents if agent != task.agent]
         if len(self.agents) > 1 and len(agents_for_delegation) > 0 and task.agent:
             if not tools:
@@ -991,7 +1048,7 @@ class Crew(BaseModel):
             tools = self._inject_delegation_tools(
                 tools, task.agent, agents_for_delegation
             )
-        return tools
+        return cast(List[BaseTool], tools)
 
     def _log_task_start(self, task: Task, role: str = "None"):
         if self.output_log_file:
@@ -999,7 +1056,9 @@ class Crew(BaseModel):
                 task_name=task.name, task=task.description, agent=role, status="started"
             )
 
-    def _update_manager_tools(self, task: Task, tools: List[Tool]):
+    def _update_manager_tools(
+        self, task: Task, tools: Union[List[Tool], List[BaseTool]]
+    ) -> List[BaseTool]:
         if self.manager_agent:
             if task.agent:
                 tools = self._inject_delegation_tools(tools, task.agent, [task.agent])
@@ -1007,7 +1066,7 @@ class Crew(BaseModel):
                 tools = self._inject_delegation_tools(
                     tools, self.manager_agent, self.agents
                 )
-        return tools
+        return cast(List[BaseTool], tools)
 
     def _get_context(self, task: Task, task_outputs: List[TaskOutput]):
         context = (
@@ -1125,9 +1184,13 @@ class Crew(BaseModel):
         result = self._execute_tasks(self.tasks, start_index, True)
         return result
 
-    def query_knowledge(self, query: List[str]) -> Union[List[Dict[str, Any]], None]:
+    def query_knowledge(
+        self, query: List[str], results_limit: int = 3, score_threshold: float = 0.35
+    ) -> Union[List[Dict[str, Any]], None]:
         if self.knowledge:
-            return self.knowledge.query(query)
+            return self.knowledge.query(
+                query, results_limit=results_limit, score_threshold=score_threshold
+            )
         return None
 
     def fetch_inputs(self) -> Set[str]:
@@ -1156,7 +1219,12 @@ class Crew(BaseModel):
         return required_inputs
 
     def copy(self):
-        """Create a deep copy of the Crew."""
+        """
+        Creates a deep copy of the Crew instance.
+
+        Returns:
+            Crew: A new instance with copied components
+        """
 
         exclude = {
             "id",
@@ -1168,13 +1236,19 @@ class Crew(BaseModel):
             "_short_term_memory",
             "_long_term_memory",
             "_entity_memory",
+            "_external_memory",
+            "_telemetry",
             "agents",
             "tasks",
             "knowledge_sources",
             "knowledge",
+            "manager_agent",
+            "manager_llm",
         }
 
         cloned_agents = [agent.copy() for agent in self.agents]
+        manager_agent = self.manager_agent.copy() if self.manager_agent else None
+        manager_llm = shallow_copy(self.manager_llm) if self.manager_llm else None
 
         task_mapping = {}
 
@@ -1197,6 +1271,20 @@ class Crew(BaseModel):
 
         copied_data = self.model_dump(exclude=exclude)
         copied_data = {k: v for k, v in copied_data.items() if v is not None}
+        if self.short_term_memory:
+            copied_data["short_term_memory"] = self.short_term_memory.model_copy(
+                deep=True
+            )
+        if self.long_term_memory:
+            copied_data["long_term_memory"] = self.long_term_memory.model_copy(
+                deep=True
+            )
+        if self.entity_memory:
+            copied_data["entity_memory"] = self.entity_memory.model_copy(deep=True)
+        if self.external_memory:
+            copied_data["external_memory"] = self.external_memory.model_copy(deep=True)
+        if self.user_memory:
+            copied_data["user_memory"] = self.user_memory.model_copy(deep=True)
 
         copied_data.pop("agents", None)
         copied_data.pop("tasks", None)
@@ -1207,6 +1295,8 @@ class Crew(BaseModel):
             tasks=cloned_tasks,
             knowledge_sources=existing_knowledge_sources,
             knowledge=existing_knowledge,
+            manager_agent=manager_agent,
+            manager_llm=manager_llm,
         )
 
         return copied_crew
@@ -1250,13 +1340,14 @@ class Crew(BaseModel):
     def test(
         self,
         n_iterations: int,
-        eval_llm: Union[str, InstanceOf[LLM]],
+        eval_llm: Union[str, InstanceOf[BaseLLM]],
         inputs: Optional[Dict[str, Any]] = None,
     ) -> None:
         """Test and evaluate the Crew with the given inputs for n iterations concurrently using concurrent.futures."""
         try:
-            eval_llm = create_llm(eval_llm)
-            if not eval_llm:
+            # Create LLM instance and ensure it's of type LLM for CrewEvaluator
+            llm_instance = create_llm(eval_llm)
+            if not llm_instance:
                 raise ValueError("Failed to create LLM instance.")
 
             crewai_event_bus.emit(
@@ -1264,12 +1355,12 @@ class Crew(BaseModel):
                 CrewTestStartedEvent(
                     crew_name=self.name or "crew",
                     n_iterations=n_iterations,
-                    eval_llm=eval_llm,
+                    eval_llm=llm_instance,
                     inputs=inputs,
                 ),
             )
             test_crew = self.copy()
-            evaluator = CrewEvaluator(test_crew, eval_llm)  # type: ignore[arg-type]
+            evaluator = CrewEvaluator(test_crew, llm_instance)
 
             for i in range(1, n_iterations + 1):
                 evaluator.set_iteration(i)
@@ -1306,7 +1397,15 @@ class Crew(BaseModel):
             RuntimeError: If memory reset operation fails.
         """
         VALID_TYPES = frozenset(
-            ["long", "short", "entity", "knowledge", "kickoff_outputs", "all"]
+            [
+                "long",
+                "short",
+                "entity",
+                "knowledge",
+                "kickoff_outputs",
+                "all",
+                "external",
+            ]
         )
 
         if command_type not in VALID_TYPES:
@@ -1320,8 +1419,6 @@ class Crew(BaseModel):
             else:
                 self._reset_specific_memory(command_type)
 
-            self._logger.log("info", f"{command_type} memory has been reset")
-
         except Exception as e:
             error_msg = f"Failed to reset {command_type} memory: {str(e)}"
             self._logger.log("error", error_msg)
@@ -1332,6 +1429,7 @@ class Crew(BaseModel):
         memory_systems = [
             ("short term", getattr(self, "_short_term_memory", None)),
             ("entity", getattr(self, "_entity_memory", None)),
+            ("external", getattr(self, "_external_memory", None)),
             ("long term", getattr(self, "_long_term_memory", None)),
             ("task output", getattr(self, "_task_output_handler", None)),
             ("knowledge", getattr(self, "knowledge", None)),
@@ -1341,8 +1439,14 @@ class Crew(BaseModel):
             if system is not None:
                 try:
                     system.reset()
+                    self._logger.log(
+                        "info",
+                        f"[Crew ({self.name if self.name else self.id})] {name} memory has been reset",
+                    )
                 except Exception as e:
-                    raise RuntimeError(f"Failed to reset {name} memory") from e
+                    raise RuntimeError(
+                        f"[Crew ({self.name if self.name else self.id})] Failed to reset {name} memory: {str(e)}"
+                    ) from e
 
     def _reset_specific_memory(self, memory_type: str) -> None:
         """Reset a specific memory system.
@@ -1354,11 +1458,15 @@ class Crew(BaseModel):
             RuntimeError: If the specified memory system fails to reset
         """
         reset_functions = {
-            "long": (self._long_term_memory, "long term"),
-            "short": (self._short_term_memory, "short term"),
-            "entity": (self._entity_memory, "entity"),
-            "knowledge": (self.knowledge, "knowledge"),
-            "kickoff_outputs": (self._task_output_handler, "task output"),
+            "long": (getattr(self, "_long_term_memory", None), "long term"),
+            "short": (getattr(self, "_short_term_memory", None), "short term"),
+            "entity": (getattr(self, "_entity_memory", None), "entity"),
+            "knowledge": (getattr(self, "knowledge", None), "knowledge"),
+            "kickoff_outputs": (
+                getattr(self, "_task_output_handler", None),
+                "task output",
+            ),
+            "external": (getattr(self, "_external_memory", None), "external"),
         }
 
         memory_system, name = reset_functions[memory_type]
@@ -1367,5 +1475,11 @@ class Crew(BaseModel):
 
         try:
             memory_system.reset()
+            self._logger.log(
+                "info",
+                f"[Crew ({self.name if self.name else self.id})] {name} memory has been reset",
+            )
         except Exception as e:
-            raise RuntimeError(f"Failed to reset {name} memory") from e
+            raise RuntimeError(
+                f"[Crew ({self.name if self.name else self.id})] Failed to reset {name} memory: {str(e)}"
+            ) from e
