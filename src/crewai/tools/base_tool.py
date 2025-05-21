@@ -160,7 +160,7 @@ class BaseTool(BaseModel, ABC):
             for name, field in self.args_schema.model_fields.items()
         }
 
-        self.description = f"Tool Name: {self.name}\nTool Arguments: {args_schema}\nTool Description: {self.description}"
+        self.description = f"Tool Name: {self.name}\nTool Arguments JSON Schema: {args_schema}\nTool Description: {self.description}"
 
     @staticmethod
     def _get_arg_annotations(annotation: type[Any] | None) -> str:
