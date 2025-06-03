@@ -5,6 +5,7 @@ from typing import Any, Dict, List, Optional, Union
 def interpolate_only(
     input_string: Optional[str],
     inputs: Dict[str, Union[str, int, float, Dict[str, Any], List[Any]]],
+    legacy_interpolation: bool = False
 ) -> str:
     """Interpolate placeholders (e.g., {key}) in a string while leaving JSON untouched.
     Only interpolates placeholders that follow the pattern {variable_name} where
@@ -16,6 +17,7 @@ def interpolate_only(
         inputs: Dictionary mapping template variables to their values.
                Supported value types are strings, integers, floats, and dicts/lists
                containing only these types and other nested dicts/lists.
+        legacy_interpolation: If True, keeps the legacy behavior of interpolation.
 
     Returns:
         The interpolated string with all template variables replaced with their values.
@@ -24,6 +26,9 @@ def interpolate_only(
     Raises:
         ValueError: If a value contains unsupported types or a template variable is missing
     """
+
+    if legacy_interpolation:
+        return legacy_interpolate_only(input_string, inputs)
 
     # Validation function for recursive type checking
     def validate_type(value: Any) -> None:
@@ -80,3 +85,68 @@ def interpolate_only(
             result = result.replace(placeholder, value)
 
     return result
+
+def legacy_interpolate_only(
+    input_string: Optional[str],
+    inputs: Dict[str, Union[str, int, float, Dict[str, Any], List[Any]]],
+) -> str:
+    """Interpolate placeholders (e.g., {key}) in a string while leaving JSON untouched.
+
+    Args:
+        input_string: The string containing template variables to interpolate.
+                     Can be None or empty, in which case an empty string is returned.
+        inputs: Dictionary mapping template variables to their values.
+               Supported value types are strings, integers, floats, and dicts/lists
+               containing only these types and other nested dicts/lists.
+
+    Returns:
+        The interpolated string with all template variables replaced with their values.
+        Empty string if input_string is None or empty.
+
+    Raises:
+        ValueError: If a value contains unsupported types
+    """
+
+    # Validation function for recursive type checking
+    def validate_type(value: Any) -> None:
+        if value is None:
+            return
+        if isinstance(value, (str, int, float, bool)):
+            return
+        if isinstance(value, (dict, list)):
+            for item in value.values() if isinstance(value, dict) else value:
+                validate_type(item)
+            return
+        raise ValueError(
+            f"Unsupported type {type(value).__name__} in inputs. "
+            "Only str, int, float, bool, dict, and list are allowed."
+        )
+
+    # Validate all input values
+    for key, value in inputs.items():
+        try:
+            validate_type(value)
+        except ValueError as e:
+            raise ValueError(f"Invalid value for key '{key}': {str(e)}") from e
+
+    if input_string is None or not input_string:
+        return ""
+    if "{" not in input_string and "}" not in input_string:
+        return input_string
+    if not inputs:
+        raise ValueError(
+            "Inputs dictionary cannot be empty when interpolating variables"
+        )
+    try:
+        escaped_string = input_string.replace("{", "{{").replace("}", "}}")
+
+        for key in inputs.keys():
+            escaped_string = escaped_string.replace(f"{{{{{key}}}}}", f"{{{key}}}")
+
+        return escaped_string.format(**inputs)
+    except KeyError as e:
+        raise KeyError(
+            f"Template variable '{e.args[0]}' not found in inputs dictionary"
+        ) from e
+    except ValueError as e:
+        raise ValueError(f"Error during string interpolation: {str(e)}") from e

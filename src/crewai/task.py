@@ -543,10 +543,10 @@ class Task(BaseModel):
 
     def prompt(self) -> str:
         """Generates the task prompt with optional markdown formatting.
-        
+
         When the markdown attribute is True, instructions for formatting the
         response in Markdown syntax will be added to the prompt.
-        
+
         Returns:
             str: The formatted prompt string containing the task description,
                  expected output, and optional markdown formatting instructions.
@@ -557,7 +557,7 @@ class Task(BaseModel):
             expected_output=self.expected_output
         )
         tasks_slices = [self.description, output]
-        
+
         if self.markdown:
             markdown_instruction = """Your final answer MUST be formatted in Markdown syntax.
 Follow these guidelines:
@@ -595,7 +595,7 @@ Follow these guidelines:
 
         try:
             self.description = interpolate_only(
-                input_string=self._original_description, inputs=inputs
+                input_string=self._original_description, inputs=inputs, legacy_interpolation=True #TODO: Remove the legacy_interpolation=True flag in the future when the binding assets placeholders are reworked
             )
         except KeyError as e:
             raise ValueError(
@@ -606,7 +606,7 @@ Follow these guidelines:
 
         try:
             self.expected_output = interpolate_only(
-                input_string=self._original_expected_output, inputs=inputs
+                input_string=self._original_expected_output, inputs=inputs, legacy_interpolation=True #TODO: Remove the legacy_interpolation=True flag in the future when the binding assets placeholders are reworked
             )
         except (KeyError, ValueError) as e:
             raise ValueError(f"Error interpolating expected_output: {str(e)}") from e
@@ -614,7 +614,7 @@ Follow these guidelines:
         if self.output_file is not None:
             try:
                 self.output_file = interpolate_only(
-                    input_string=self._original_output_file, inputs=inputs
+                    input_string=self._original_output_file, inputs=inputs, legacy_interpolation=True #TODO: Remove the legacy_interpolation=True flag in the future when the binding assets placeholders are reworked
                 )
             except (KeyError, ValueError) as e:
                 raise ValueError(

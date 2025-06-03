@@ -10,15 +10,29 @@ class TestInterpolateOnly:
 
     def test_basic_variable_interpolation(self):
         """Test basic variable interpolation works correctly."""
-        template = "Hello, {name}! Welcome to {company}."
+        template = "Hello, {name}! Welcome to {company}. {with space}"
         inputs: Dict[str, Union[str, int, float, Dict[str, Any], List[Any]]] = {
             "name": "Alice",
             "company": "CrewAI",
+            "with space": "value with space"
         }
 
         result = interpolate_only(template, inputs)
 
-        assert result == "Hello, Alice! Welcome to CrewAI."
+        assert result == "Hello, Alice! Welcome to CrewAI. {with space}"
+
+    def test_legacy_variable_interpolation(self):
+        """Test legacy variable interpolation works correctly."""
+        template = "Hello, {name}! Welcome to {company}. {with space}"
+        inputs: Dict[str, Union[str, int, float, Dict[str, Any], List[Any]]] = {
+            "name": "Alice",
+            "company": "CrewAI",
+            "with space": "value with space",
+        }
+
+        result = interpolate_only(template, inputs, legacy_interpolation=True)
+
+        assert result == "Hello, Alice! Welcome to CrewAI. value with space"
 
     def test_multiple_occurrences_of_same_variable(self):
         """Test that multiple occurrences of the same variable are replaced."""
@@ -150,11 +164,11 @@ class TestInterpolateOnly:
         """Test a complex scenario with both valid variables and JSON structures."""
         template = """
         {agent_name} is working on task {task_id}.
-        
+
         Instructions:
         1. Process the data
         2. Return results as:
-        
+
         {
           "taskId": "{task_id}",
           "results": {
