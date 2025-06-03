@@ -102,3 +102,12 @@ class CrewTestFailedEvent(CrewBaseEvent):
 
     error: str
     type: str = "crew_test_failed"
+
+
+class CrewTestResultEvent(CrewBaseEvent):
+    """Event emitted when a crew test result is available"""
+
+    quality: float
+    execution_duration: float
+    model: str
+    type: str = "crew_test_result"
