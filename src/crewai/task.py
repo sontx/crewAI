@@ -102,7 +102,7 @@ class Task(BaseModel):
     )
     context: Union[List["Task"], None, _NotSpecified] = Field(
         description="Other tasks that will have their output used as context for this task.",
-        default=NOT_SPECIFIED
+        default=NOT_SPECIFIED,
     )
     async_execution: Optional[bool] = Field(
         description="Whether the task should be executed asynchronously or not.",
@@ -163,9 +163,7 @@ class Task(BaseModel):
     end_time: Optional[datetime.datetime] = Field(
         default=None, description="End time of the task execution"
     )
-    model_config = {
-        "arbitrary_types_allowed": True
-    }
+    model_config = {"arbitrary_types_allowed": True}
 
     @field_validator("guardrail")
     @classmethod
@@ -209,7 +207,6 @@ class Task(BaseModel):
             # Check return annotation if present, but don't require it
             return_annotation = sig.return_annotation
             if return_annotation != inspect.Signature.empty:
-
                 return_annotation_args = get_args(return_annotation)
                 if not (
                     get_origin(return_annotation) is tuple
@@ -445,7 +442,7 @@ class Task(BaseModel):
                 guardrail_result = process_guardrail(
                     output=task_output,
                     guardrail=self._guardrail,
-                    retry_count=self.retry_count
+                    retry_count=self.retry_count,
                 )
                 if not guardrail_result.success:
                     if self.retry_count >= self.max_retries:
@@ -526,8 +523,6 @@ class Task(BaseModel):
         )
         from crewai.utilities.events.crewai_event_bus import crewai_event_bus
 
-        result = self._guardrail(task_output)
-
         crewai_event_bus.emit(
             self,
             LLMGuardrailStartedEvent(
@@ -535,7 +530,13 @@ class Task(BaseModel):
             ),
         )
 
-        guardrail_result = GuardrailResult.from_tuple(result)
+        try:
+            result = self._guardrail(task_output)
+            guardrail_result = GuardrailResult.from_tuple(result)
+        except Exception as e:
+            guardrail_result = GuardrailResult(
+                success=False, result=None, error=f"Guardrail execution error: {str(e)}"
+            )
 
         crewai_event_bus.emit(
             self,
