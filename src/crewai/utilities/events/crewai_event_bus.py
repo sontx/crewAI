@@ -111,5 +111,20 @@ class CrewAIEventsBus:
             self._handlers = previous_handlers
 
 
-# Global instance
-crewai_event_bus = CrewAIEventsBus()
+# Proxy class to allow swapping the event bus instance
+class CrewAIEventBusProxy:
+    def __init__(self, instance: CrewAIEventsBus):
+        self._instance = instance
+
+    def set_instance(self, instance: CrewAIEventsBus):
+        self._instance = instance
+
+    def get_instance(self) -> CrewAIEventsBus:
+        return self._instance
+
+    def __getattr__(self, name):
+        return getattr(self._instance, name)
+
+
+# Global proxy instance
+crewai_event_bus = CrewAIEventBusProxy(CrewAIEventsBus())
