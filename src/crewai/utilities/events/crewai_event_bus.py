@@ -4,6 +4,7 @@ from typing import Any, Callable, Dict, List, Type, TypeVar, cast
 
 from blinker import Signal
 
+from crewai.utilities.events.execution_context import execution_context
 from crewai.utilities.events.base_events import BaseEvent
 from crewai.utilities.events.event_types import EventTypes
 
@@ -71,7 +72,10 @@ class CrewAIEventsBus:
             if isinstance(event, event_type):
                 for handler in handlers:
                     try:
-                        handler(source, event)
+                        if handler.__code__.co_argcount == 3:
+                            handler(source, event, execution_context.get())
+                        else:
+                            handler(source, event)
                     except Exception as e:
                         print(
                             f"[EventBus Error] Handler '{handler.__name__}' failed for event '{event_type.__name__}': {e}"
@@ -110,21 +114,5 @@ class CrewAIEventsBus:
         finally:
             self._handlers = previous_handlers
 
-
-# Proxy class to allow swapping the event bus instance
-class CrewAIEventBusProxy:
-    def __init__(self, instance: CrewAIEventsBus):
-        self._instance = instance
-
-    def set_instance(self, instance: CrewAIEventsBus):
-        self._instance = instance
-
-    def get_instance(self) -> CrewAIEventsBus:
-        return self._instance
-
-    def __getattr__(self, name):
-        return getattr(self._instance, name)
-
-
 # Global proxy instance
-crewai_event_bus = CrewAIEventBusProxy(CrewAIEventsBus())
+crewai_event_bus = CrewAIEventsBus()

@@ -54,7 +54,7 @@ def _track_install_async():
 
 _track_install_async()
 
-__version__ = "0.140.1"
+__version__ = "0.140.2"
 __all__ = [
     "Agent",
     "Crew",
