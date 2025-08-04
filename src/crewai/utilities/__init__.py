@@ -10,7 +10,7 @@ from .rpm_controller import RPMController
 from .exceptions.context_window_exceeding_exception import (
     LLMContextLengthExceededException,
 )
-from .embedding_configurator import EmbeddingConfigurator
+
 from .exceptions.interrupted_exception import InterruptedException
 
 __all__ = [
@@ -25,6 +25,5 @@ __all__ = [
     "RPMController",
     "YamlParser",
     "LLMContextLengthExceededException",
-    "EmbeddingConfigurator",
     "InterruptedException",
 ]

@@ -9,12 +9,7 @@
   },
   "favicon": "/images/favicon.svg",
   "contextual": {
-    "options": [
-      "copy",
-      "view",
-      "chatgpt",
-      "claude"
-    ]
+    "options": ["copy", "view", "chatgpt", "claude"]
   },
   "navigation": {
     "languages": [
@@ -38,11 +33,6 @@
               "icon": "robot"
             },
             {
-              "anchor": "Get Help",
-              "href": "mailto:support@crewai.com",
-              "icon": "headset"
-            },
-            {
               "anchor": "Releases",
               "href": "https://github.com/crewAIInc/crewAI/releases",
               "icon": "tag"
@@ -55,32 +45,22 @@
             "groups": [
               {
                 "group": "Get Started",
-                "pages": [
-                  "en/introduction",
-                  "en/installation",
-                  "en/quickstart"
-                ]
+                "pages": ["en/introduction", "en/installation", "en/quickstart"]
               },
               {
                 "group": "Guides",
                 "pages": [
                   {
                     "group": "Strategy",
-                    "pages": [
-                      "en/guides/concepts/evaluating-use-cases"
-                    ]
+                    "pages": ["en/guides/concepts/evaluating-use-cases"]
                   },
                   {
                     "group": "Agents",
-                    "pages": [
-                      "en/guides/agents/crafting-effective-agents"
-                    ]
+                    "pages": ["en/guides/agents/crafting-effective-agents"]
                   },
                   {
                     "group": "Crews",
-                    "pages": [
-                      "en/guides/crews/first-crew"
-                    ]
+                    "pages": ["en/guides/crews/first-crew"]
                   },
                   {
                     "group": "Flows",
@@ -94,7 +74,6 @@
                     "pages": [
                       "en/guides/advanced/customizing-prompts",
                       "en/guides/advanced/fingerprinting"
-                 
                     ]
                   }
                 ]
@@ -182,7 +161,9 @@
                       "en/tools/search-research/websitesearchtool",
                       "en/tools/search-research/codedocssearchtool",
                       "en/tools/search-research/youtubechannelsearchtool",
-                      "en/tools/search-research/youtubevideosearchtool"
+                      "en/tools/search-research/youtubevideosearchtool",
+                      "en/tools/search-research/tavilysearchtool",
+                      "en/tools/search-research/tavilyextractortool"
                     ]
                   },
                   {
@@ -241,6 +222,7 @@
                   "en/observability/langtrace",
                   "en/observability/maxim",
                   "en/observability/mlflow",
+                  "en/observability/neatlogs",
                   "en/observability/openlit",
                   "en/observability/opik",
                   "en/observability/patronus-evaluation",
@@ -274,9 +256,7 @@
               },
               {
                 "group": "Telemetry",
-                "pages": [
-                  "en/telemetry"
-                ]
+                "pages": ["en/telemetry"]
               }
             ]
           },
@@ -285,9 +265,7 @@
             "groups": [
               {
                 "group": "Getting Started",
-                "pages": [
-                  "en/enterprise/introduction"
-                ]
+                "pages": ["en/enterprise/introduction"]
               },
               {
                 "group": "Features",
@@ -296,7 +274,8 @@
                   "en/enterprise/features/webhook-streaming",
                   "en/enterprise/features/traces",
                   "en/enterprise/features/hallucination-guardrail",
-                  "en/enterprise/features/integrations"
+                  "en/enterprise/features/integrations",
+                  "en/enterprise/features/agent-repositories"
                 ]
               },
               {
@@ -341,9 +320,7 @@
               },
               {
                 "group": "Resources",
-                "pages": [
-                  "en/enterprise/resources/frequently-asked-questions"
-                ]
+                "pages": ["en/enterprise/resources/frequently-asked-questions"]
               }
             ]
           },
@@ -352,9 +329,7 @@
             "groups": [
               {
                 "group": "Getting Started",
-                "pages": [
-                  "en/api-reference/introduction"
-                ]
+                "pages": ["en/api-reference/introduction"]
               },
               {
                 "group": "Endpoints",
@@ -364,16 +339,13 @@
           },
           {
             "tab": "Examples",
-                        "groups": [
+            "groups": [
               {
                 "group": "Examples",
-                "pages": [
-                  "en/examples/example"
-                ]
+                "pages": ["en/examples/example"]
               }
             ]
           }
- 
         ]
       },
       {
@@ -394,11 +366,6 @@
               "anchor": "Crew GPT",
               "href": "https://chatgpt.com/g/g-qqTuUWsBY-crewai-assistant",
               "icon": "robot"
-            },
-            {
-              "anchor": "Obter Ajuda",
-              "href": "mailto:support@crewai.com",
-              "icon": "headset"
             },
             {
               "anchor": "Lançamentos",
@@ -424,21 +391,15 @@
                 "pages": [
                   {
                     "group": "Estratégia",
-                    "pages": [
-                      "pt-BR/guides/concepts/evaluating-use-cases"
-                    ]
+                    "pages": ["pt-BR/guides/concepts/evaluating-use-cases"]
                   },
                   {
                     "group": "Agentes",
-                    "pages": [
-                      "pt-BR/guides/agents/crafting-effective-agents"
-                    ]
+                    "pages": ["pt-BR/guides/agents/crafting-effective-agents"]
                   },
                   {
                     "group": "Crews",
-                    "pages": [
-                      "pt-BR/guides/crews/first-crew"
-                    ]
+                    "pages": ["pt-BR/guides/crews/first-crew"]
                   },
                   {
                     "group": "Flows",
@@ -631,9 +592,7 @@
               },
               {
                 "group": "Telemetria",
-                "pages": [
-                  "pt-BR/telemetry"
-                ]
+                "pages": ["pt-BR/telemetry"]
               }
             ]
           },
@@ -642,9 +601,7 @@
             "groups": [
               {
                 "group": "Começando",
-                "pages": [
-                  "pt-BR/enterprise/introduction"
-                ]
+                "pages": ["pt-BR/enterprise/introduction"]
               },
               {
                 "group": "Funcionalidades",
@@ -709,9 +666,7 @@
             "groups": [
               {
                 "group": "Começando",
-                "pages": [
-                  "pt-BR/api-reference/introduction"
-                ]
+                "pages": ["pt-BR/api-reference/introduction"]
               },
               {
                 "group": "Endpoints",
@@ -721,16 +676,13 @@
           },
           {
             "tab": "Exemplos",
-                        "groups": [
+            "groups": [
               {
                 "group": "Exemplos",
-                "pages": [
-                  "pt-BR/examples/example"
-                ]
+                "pages": ["pt-BR/examples/example"]
               }
             ]
           }
- 
         ]
       }
     ]
@@ -774,7 +726,7 @@
       "destination": "/en/introduction"
     },
     {
-      "source": "/installation", 
+      "source": "/installation",
       "destination": "/en/installation"
     },
     {

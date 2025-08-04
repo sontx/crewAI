@@ -76,6 +76,7 @@ Exemplo:
 crewai train -n 10 -f my_training_data.pkl
 ```
 
+```python
 # Exemplo de uso programático do comando train
 n_iterations = 2
 inputs = {"topic": "Treinamento CrewAI"}
@@ -83,12 +84,13 @@ filename = "seu_modelo.pkl"
 
 try:
     SuaCrew().crew().train(
-      n_iterations=n_iterations, 
-      inputs=inputs, 
+      n_iterations=n_iterations,
+      inputs=inputs,
       filename=filename
     )
 except Exception as e:
     raise Exception(f"Ocorreu um erro ao treinar a crew: {e}")
+```
 
 ### 4. Replay
 
@@ -101,7 +103,7 @@ crewai replay [OPTIONS]
 - `-t, --task_id TEXT`: Reexecuta o crew a partir deste task ID, incluindo todas as tarefas subsequentes
 
 Exemplo:
-```shell Terminal    
+```shell Terminal
 crewai replay -t task_123456
 ```
 
@@ -147,7 +149,7 @@ crewai test [OPTIONS]
 - `-m, --model TEXT`: Modelo LLM para executar os testes no Crew (padrão: "gpt-4o-mini")
 
 Exemplo:
-```shell Terminal    
+```shell Terminal
 crewai test -n 5 -m gpt-3.5-turbo
 ```
 
@@ -201,10 +203,7 @@ def crew(self) -> Crew:
 Implemente o crew ou flow no [CrewAI Enterprise](https://app.crewai.com).
 
 - **Autenticação**: Você precisa estar autenticado para implementar no CrewAI Enterprise.
-    ```shell Terminal
-    crewai signup
-    ```
-    Caso já tenha uma conta, você pode fazer login com:
+    Você pode fazer login ou criar uma conta com:
     ```shell Terminal
     crewai login
     ```
@@ -251,7 +250,7 @@ Você deve estar autenticado no CrewAI Enterprise para usar estes comandos de ge
 - **Implantar o Crew**: Depois de autenticado, você pode implantar seu crew ou flow no CrewAI Enterprise.
     ```shell Terminal
     crewai deploy push
-    ``` 
+    ```
     - Inicia o processo de deployment na plataforma CrewAI Enterprise.
     - Após a iniciação bem-sucedida, será exibida a mensagem Deployment created successfully! juntamente com o Nome do Deployment e um Deployment ID (UUID) único.
 
