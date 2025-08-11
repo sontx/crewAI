@@ -1096,7 +1096,7 @@ class Crew(FlowTrackable, BaseModel):
             CrewKickoffCompletedEvent(
                 crew_name=self.name or "crew",
                 output=final_task_output,
-                token_usage=token_usage,
+                token_usage=self.token_usage,
             ),
         )
         return CrewOutput(
