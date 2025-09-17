@@ -43,12 +43,12 @@ from crewai.utilities.config import process_config
 from crewai.utilities.constants import NOT_SPECIFIED, _NotSpecified
 from crewai.utilities.guardrail import process_guardrail, GuardrailResult
 from crewai.utilities.converter import Converter, convert_to_model
-from crewai.utilities.events import (
+from crewai.events.event_types import (
     TaskCompletedEvent,
     TaskFailedEvent,
     TaskStartedEvent,
 )
-from crewai.utilities.events.crewai_event_bus import crewai_event_bus
+from crewai.events.event_bus import crewai_event_bus
 from crewai.utilities.exceptions.interrupted_exception import InterruptedException
 from crewai.utilities.i18n import I18N
 from crewai.utilities.printer import Printer
@@ -64,7 +64,6 @@ class Task(BaseModel):
         agent: Agent responsible for task execution. Represents entity performing task.
         async_execution: Boolean flag indicating asynchronous task execution.
         callback: Function/object executed post task completion for additional actions.
-        before_callback: Function/object executed pre task execution for additional actions.
         config: Dictionary containing task-specific configuration parameters.
         context: List of Task instances providing task context or input data.
         description: Descriptive text detailing task's purpose and execution.
@@ -99,9 +98,6 @@ class Task(BaseModel):
     )
     callback: Optional[Any] = Field(
         description="Callback to be executed after the task is completed.", default=None
-    )
-    before_callback: Optional[Any] = Field(
-        description="Callback to be executed before the task is executed.", default=None
     )
     agent: Optional[BaseAgent] = Field(
         description="Agent responsible for execution the task.", default=None
@@ -165,11 +161,10 @@ class Task(BaseModel):
     )
     max_retries: Optional[int] = Field(
         default=None,
-        description="[DEPRECATED] Maximum number of retries when guardrail fails. Use guardrail_max_retries instead. Will be removed in v1.0.0"
+        description="[DEPRECATED] Maximum number of retries when guardrail fails. Use guardrail_max_retries instead. Will be removed in v1.0.0",
     )
     guardrail_max_retries: int = Field(
-        default=3,
-        description="Maximum number of retries when guardrail fails"
+        default=3, description="Maximum number of retries when guardrail fails"
     )
     retry_count: int = Field(default=0, description="Current number of retries")
     start_time: Optional[datetime.datetime] = Field(
@@ -372,7 +367,7 @@ class Task(BaseModel):
                 "The 'max_retries' parameter is deprecated and will be removed in CrewAI v1.0.0. "
                 "Please use 'guardrail_max_retries' instead.",
                 DeprecationWarning,
-                stacklevel=2
+                stacklevel=2,
             )
             self.guardrail_max_retries = self.max_retries
         return self
@@ -440,9 +435,6 @@ class Task(BaseModel):
                 raise Exception(
                     f"The task '{self.description}' has no agent assigned, therefore it can't be executed directly and should be executed in a Crew using a specific process that support that, like hierarchical."
                 )
-
-            if self.before_callback:
-              self.before_callback()
 
             self.start_time = datetime.datetime.now()
 
@@ -548,11 +540,11 @@ class Task(BaseModel):
     def _process_guardrail(self, task_output: TaskOutput) -> GuardrailResult:
         assert self._guardrail is not None
 
-        from crewai.utilities.events import (
+        from crewai.events.event_types import (
             LLMGuardrailCompletedEvent,
             LLMGuardrailStartedEvent,
         )
-        from crewai.utilities.events.crewai_event_bus import crewai_event_bus
+        from crewai.events.event_bus import crewai_event_bus
 
         crewai_event_bus.emit(
             self,
@@ -645,7 +637,7 @@ Follow these guidelines:
 
         try:
             self.description = interpolate_only(
-                input_string=self._original_description, inputs=inputs, legacy_interpolation=True #TODO: Remove the legacy_interpolation=True flag in the future when the binding assets placeholders are reworked
+                input_string=self._original_description, inputs=inputs
             )
         except KeyError as e:
             raise ValueError(
@@ -656,7 +648,7 @@ Follow these guidelines:
 
         try:
             self.expected_output = interpolate_only(
-                input_string=self._original_expected_output, inputs=inputs, legacy_interpolation=True #TODO: Remove the legacy_interpolation=True flag in the future when the binding assets placeholders are reworked
+                input_string=self._original_expected_output, inputs=inputs
             )
         except (KeyError, ValueError) as e:
             raise ValueError(f"Error interpolating expected_output: {str(e)}") from e
@@ -664,7 +656,7 @@ Follow these guidelines:
         if self.output_file is not None:
             try:
                 self.output_file = interpolate_only(
-                    input_string=self._original_output_file, inputs=inputs, legacy_interpolation=True #TODO: Remove the legacy_interpolation=True flag in the future when the binding assets placeholders are reworked
+                    input_string=self._original_output_file, inputs=inputs
                 )
             except (KeyError, ValueError) as e:
                 raise ValueError(
